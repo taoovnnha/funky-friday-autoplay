@@ -649,7 +649,7 @@ windows.misc:AddLabel({ text = 'Sezei - Contributor'})
 windows.misc:AddLabel({ text = 'aKinlei - Notifications'})
 windows.misc:AddDivider()
 
-windows.misc:AddLabel({ text = 'Version 1.9c' })
+windows.misc:AddLabel({ text = 'Version 1.9d' })
 windows.misc:AddLabel({ text = 'Updated 3/20/22' })
 windows.misc:AddLabel({ text = 'Thank you for using this script!' })
 
