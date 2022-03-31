@@ -44,8 +44,56 @@ if type(getconnections) ~= 'function' then return fail('Unsupported exploit (mis
 if type(getloadedmodules) ~= 'function' then return fail('Unsupported exploit (misssing "getloadedmodules")') end
 if type(getgc) ~= 'function' then return fail('Unsupported exploit (misssing "getgc")') end
 
+local getinfo = debug.getinfo or getinfo;
+local getupvalue = debug.getupvalue or getupvalue;
+local getupvalues = debug.getupvalues or getupvalues;
+local setupvalue = debug.setupvalue or setupvalue;
+
+if type(setupvalue) ~= 'function' then return fail('Unsupported exploit (misssing "debug.setupvalue")') end
+if type(getupvalue) ~= 'function' then return fail('Unsupported exploit (misssing "debug.getupvalue")') end
+if type(getupvalues) ~= 'function' then return fail('Unsupported exploit (missing "debug.getupvalues")') end
+
+-- free exploit bandaid fix
+if type(getinfo) ~= 'function' then
+    local debug_info = debug.info;
+    if type(debug_info) ~= 'function' then
+        -- if your exploit doesnt have getrenv you have no hope
+        if type(getrenv) ~= 'function' then return fail('Unsupported exploit (missing "getrenv")') end
+        debug_info = getrenv().debug.info
+    end
+
+    getinfo = function(f)
+        assert(type(f) == 'function', string.format('Invalid argument #1 to debug.getinfo (expected %s got %s', 'function', type(f)))
+
+        local results = { debug.info(f, 'slnfa') }
+        local _, upvalues = pcall(getupvalues, f)
+
+        if type(upvalues) ~= 'table' then
+            upvalues = {}
+        end
+
+        local nups = 0
+        for k in next, upvalues do
+            nups = nups + 1
+        end
+
+        -- winning code
+        return {
+            source      = '@' .. results[1],
+            short_src   = results[1],
+            what        = results[1] == '[C]' and 'C' or 'Lua',
+            currentline = results[2],
+            name        = results[3],
+            func        = results[4],
+            numparams   = results[5],
+            is_vararg   = results[6], -- 'a' argument returns 2 values :)
+            nups        = nups,     
+        }
+    end
+end
+
 local library = urlLoad("https://raw.githubusercontent.com/wally-rblx/uwuware-ui/main/main.lua")
-local akali     = urlLoad("https://gist.githubusercontent.com/wally-rblx/e010db020afe8259048a0c3c7262cdf8/raw/76ae0921ac9bd3215017e635d2c1037a37262240/notif.lua")
+local notify = urlLoad("https://gist.githubusercontent.com/wally-rblx/e010db020afe8259048a0c3c7262cdf8/raw/76ae0921ac9bd3215017e635d2c1037a37262240/notif.lua")
 
 local httpService = game:GetService('HttpService')
 
@@ -162,16 +210,13 @@ local fireSignal, rollChance do
     end
 end
 
-
-local function notify(text, duration)
-    return akali.Notify({
+library.notify = function(text, duration)
+    return notify.Notify({
         Title = 'Funky friday autoplayer', 
         Description = text,
         Duration = duration or 1,
     })
 end
-
-library.notify = notify
 
 -- save manager
 local saveManager = {} do
@@ -522,7 +567,7 @@ local folder = windows.customization:AddFolder('Unlockables') do
         local idx = table.find(framework.SongsWhitelist, client.UserId)
         if idx then return end
 
-        notify('Developer arrows have been unlocked!', 3)
+        library.notify('Developer arrows have been unlocked!', 3)
         table.insert(framework.SongsWhitelist, client.UserId)
     end })
 end
@@ -547,7 +592,7 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
         window:AddButton({ text = 'Save config', callback = function()
             local name = library.flags.configNameInput
             if name:gsub(' ', '') == '' then
-                return notify('Failed to save. [invalid config name]', 3)
+                return library.notify('Failed to save. [invalid config name]', 3)
             end
 
             saveManager:SaveConfig(name)
@@ -557,11 +602,11 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
             local name = library.flags.configList
             
             if name:gsub(' ', '') == '' then
-                return notify('Failed to load. [invalid config name]', 3)
+                return library.notify('Failed to load. [invalid config name]', 3)
             end
 
             if not isfile('funky_friday_autoplayer\\configs\\' .. name) then
-                return notify('Failed to load. [config does not exist]', 3)
+                return library.notify('Failed to load. [config does not exist]', 3)
             end
 
             saveManager:LoadConfig(name)
@@ -592,7 +637,7 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
     end
     task.delay(1, library.refreshConfigs)
 else
-    notify('Failed to create configs window due to your exploit missing certain file functions.', 2)
+    library.notify('Failed to create configs window due to your exploit missing certain file functions.', 2)
 end
 
 
@@ -624,4 +669,7 @@ windows.misc:AddDivider()
 windows.misc:AddBind({ text = 'Menu toggle', key = Enum.KeyCode.Delete, callback = function() library:Close() end })
 
 library:Init()
-library.notify(string.format('Loaded script in %.4f second(s)!\nUsed Http cache: %s', tick() - start, tostring(usedCache)), 3)
+library.notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3)
+if usedCache then
+    library.notify('Loaded with http request cache!', 3)
+end
