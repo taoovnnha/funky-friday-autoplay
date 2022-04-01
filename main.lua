@@ -53,47 +53,10 @@ if type(setupvalue) ~= 'function' then return fail('Unsupported exploit (misssin
 if type(getupvalue) ~= 'function' then return fail('Unsupported exploit (misssing "debug.getupvalue")') end
 if type(getupvalues) ~= 'function' then return fail('Unsupported exploit (missing "debug.getupvalues")') end
 
--- free exploit bandaid fix
-if type(getinfo) ~= 'function' then
-    local debug_info = debug.info;
-    if type(debug_info) ~= 'function' then
-        -- if your exploit doesnt have getrenv you have no hope
-        if type(getrenv) ~= 'function' then return fail('Unsupported exploit (missing "getrenv")') end
-        debug_info = getrenv().debug.info
-    end
+-- removed bandaid fix as I think most exploits have the above functions, if not then idc
 
-    getinfo = function(f)
-        assert(type(f) == 'function', string.format('Invalid argument #1 to debug.getinfo (expected %s got %s', 'function', type(f)))
-
-        local results = { debug.info(f, 'slnfa') }
-        local _, upvalues = pcall(getupvalues, f)
-
-        if type(upvalues) ~= 'table' then
-            upvalues = {}
-        end
-
-        local nups = 0
-        for k in next, upvalues do
-            nups = nups + 1
-        end
-
-        -- winning code
-        return {
-            source      = '@' .. results[1],
-            short_src   = results[1],
-            what        = results[1] == '[C]' and 'C' or 'Lua',
-            currentline = results[2],
-            name        = results[3],
-            func        = results[4],
-            numparams   = results[5],
-            is_vararg   = results[6], -- 'a' argument returns 2 values :)
-            nups        = nups,     
-        }
-    end
-end
-
-local library = urlLoad("https://raw.githubusercontent.com/wally-rblx/uwuware-ui/main/main.lua")
-local notify = urlLoad("https://gist.githubusercontent.com/wally-rblx/e010db020afe8259048a0c3c7262cdf8/raw/76ae0921ac9bd3215017e635d2c1037a37262240/notif.lua")
+local UI = urlLoad("https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/Library.lua")
+local metadata = urlLoad("https://raw.githubusercontent.com/wally-rblx/funky-friday-autoplay/main/metadata.lua")
 
 local httpService = game:GetService('HttpService')
 
@@ -162,175 +125,50 @@ local fireSignal, rollChance do
     -- its a bit scuffed rn but it works good enough
 
     function rollChance()
-        if (library.flags.autoPlayerMode == 'Manual') then
-            if (library.flags.sickHeld) then return 'Sick' end
-            if (library.flags.goodHeld) then return 'Good' end
-            if (library.flags.okayHeld) then return 'Ok' end
-            if (library.flags.missHeld) then return 'Bad' end
+        -- if (//library.flags.autoPlayerMode == 'Manual') then
+        if Options.AutoplayerMode.Value == 'Manual' then
+            if (Options.SickBind:GetState()) then return 'Sick' end
+            if (Options.GoodBind:GetState()) then return 'Good' end
+            if (Options.OkayBind:GetState()) then return 'Ok' end
+            if (Options.BadBind:GetState()) then return 'Bad' end
 
             return 'Bad' -- incase if it cant find one
         end
 
         local chances = {
-            { type = 'Sick', value = library.flags.sickChance },
-            { type = 'Good', value = library.flags.goodChance },
-            { type = 'Ok', value = library.flags.okChance },
-            { type = 'Bad', value = library.flags.badChance },
-            { type = 'Miss' , value = library.flags.missChance },
+            { 'Sick', Options.SickChance.Value },
+            { 'Good', Options.GoodChance.Value },
+            { 'Ok', Options.OkChance.Value },
+            { 'Bad', Options.BadChance.Value },
+            { 'Miss' , Options.MissChance.Value },
         }
 
         table.sort(chances, function(a, b)
-            return a.value > b.value
+            return a[2] > b[2]
         end)
 
         local sum = 0;
         for i = 1, #chances do
-            sum += chances[i].value
+            sum += chances[i][2]
         end
 
         if sum == 0 then
-            -- forgot to change this before?
-            -- fixed 6/5/21
-
-            return chances[random:NextInteger(1, #chances)].type
+            return chances[random:NextInteger(1, #chances)][1]
         end
 
         local initialWeight = random:NextInteger(0, sum)
         local weight = 0;
 
         for i = 1, #chances do
-            weight = weight + chances[i].value
+            weight = weight + chances[i][2]
 
             if weight > initialWeight then
-                return chances[i].type
+                return chances[i][1]
             end
         end
 
-        return 'Sick' -- just incase it fails?
+        return 'Sick'
     end
-end
-
-library.notify = function(text, duration)
-    return notify.Notify({
-        Title = 'Funky friday autoplayer', 
-        Description = text,
-        Duration = duration or 1,
-    })
-end
-
--- save manager
-local saveManager = {} do
-    local defaultSettings = [[{"Funky Friday":{"goodChance":{"value":0,"type":"slider"},"badChance":{"value":0,"type":"slider"},"okChance":{"value":0,"type":"slider"},"autoPlayer":{"state":false,"type":"toggle"},"goodBind":{"key":"Two","type":"bind"},"sickChance":{"value":100,"type":"slider"},"okBind":{"key":"Three","type":"bind"},"sickBind":{"key":"One","type":"bind"},"Menu toggle":{"key":"Delete","type":"bind"},"secondaryPressMode":{"state":false,"type":"toggle"},"autoDelay":{"value":50,"type":"slider"},"autoPlayerToggle":{"key":"End","type":"bind"},"badBind":{"key":"Four","type":"bind"},"autoPlayerMode":{"value":"Chances","type":"list"},"missChance":{"value":0,"type":"slider"}}}]]
-    local optionTypes = {
-        toggle = {
-            Save = function(option)
-                return { type = 'toggle', state = option.state }
-            end,
-            Load = function(option, data)
-                option:SetState(data.state)
-            end
-        },
-        bind = {
-            Save = function(option)
-                return { type = 'bind', key = option.key }
-            end,
-            Load = function(option, data)
-                option:SetKey(data.key)
-            end
-        },
-        slider = {
-            Save = function(option)
-                return { type = 'slider', value = option.value }
-            end,
-            Load = function(option, data)
-                option:SetValue(data.value)
-            end,
-        },
-        color = {
-            Save = function(option)
-                return { type = 'color', color = option.color:ToHex() }
-            end,
-            Load = function(option, data)
-                option:SetValue(Color3.fromHex(data.color))
-            end
-        },
-        list = {
-            Save = function(option)
-                return { type = 'list', value = option.value }
-            end,
-            Load = function(option, data)
-                option:SetValue(data.value)
-            end
-        },
-    }
-
-    local function recurseLibraryOptions(root, callback)
-        for _, option in next, root do
-            if option.type == 'folder' then
-                recurseLibraryOptions(option.options, callback)
-            else
-                callback(option)
-            end
-        end
-    end
-
-    function saveManager:SaveConfig(name)
-        local data = {}
-
-        for _, window in next, library.windows do
-            if window.title == 'Configs' then continue end
-
-            local storage = {}
-            data[window.title] = storage
-
-            recurseLibraryOptions(window.options, function(option)
-                local parser = optionTypes[option.type]
-                if parser then
-                    storage[option.flag] = parser.Save(option)
-                end
-            end)
-        end
-
-        local s, err = pcall(writefile, 'funky_friday_autoplayer\\configs\\' .. name, httpService:JSONEncode(data))
-        if not s then
-            library.notify(string.format('Failed to save config %q because %q', name, err), 2)
-            if err == 'invalid extension' then
-                library.notify('Try adding a file extension after your config name. ex: ".json", ".txt", ".dat"', 2)
-            end
-            return
-        end
-
-        library.refreshConfigs()
-    end
-
-    function saveManager:LoadConfig(name)
-        local data
-        if name == 'default' then
-            data = defaultSettings
-        else
-            data = readfile('funky_friday_autoplayer\\configs\\' .. name)
-        end
-
-        local success, data = pcall(function() return httpService:JSONDecode(data) end)
-        if not success then 
-            return library.notify(string.format('Failed to load config %q because %q', name, data))
-        end
-
-        for _, window in next, library.windows do
-            if window.title == 'Configs' then continue end
-
-            local storage = data[window.title]
-            if not storage then continue end
-
-            recurseLibraryOptions(window.options, function(option)
-                local parser = optionTypes[option.type]
-                if parser then
-                    parser.Load(option, storage[option.flag])
-                end
-            end)
-        end
-    end
-
 end
 
 -- autoplayer
@@ -351,37 +189,40 @@ local chanceValues do
         pcall(shared._unload)
     end
 
-    library.callbacks = {}
-
-    library.threads = {}
     function shared._unload()
         if shared._id then
             pcall(runService.UnbindFromRenderStep, runService, shared._id)
         end
 
-        if library.open then
-            library:Close()
+        UI:Unload()
+
+        for i = 1, #shared.threads do
+            coroutine.close(shared.threads[i])
         end
 
-        library.base:ClearAllChildren()
-        library.base:Destroy()
-
-        for i = 1, #library.threads do
-            coroutine.close(library.threads[i])
-        end
-
-        for i = 1, #library.callbacks do
-            task.spawn(library.callbacks[i])
+        for i = 1, #shared.callbacks do
+            task.spawn(shared.callbacks[i])
         end
     end
+
+    shared.threads = {}
+    shared.callbacks = {}
 
     shared._id = httpService:GenerateGUID(false)
 
     local rng = Random.new()
     runService:BindToRenderStep(shared._id, 1, function()
-        if (not library.flags.autoPlayer) then return end
-        if typeof(framework.SongPlayer.CurrentlyPlaying) ~= 'Instance' then return end
-        if framework.SongPlayer.CurrentlyPlaying.ClassName ~= 'Sound' then return end
+        --if (not library.flags.autoPlayer) then return end
+        
+        if (not Toggles.Autoplayer) or (not Toggles.Autoplayer.Value) then 
+            return 
+        end
+
+        local currentlyPlaying = framework.SongPlayer.CurrentlyPlaying
+
+        if typeof(currentlyPlaying) ~= 'Instance' or not currentlyPlaying:IsA('Sound') then 
+            return 
+        end
 
         local arrows = {}
         for _, obj in next, framework.UI.ActiveSections do
@@ -407,7 +248,7 @@ local chanceValues do
                 end
             end
 
-            if (arrow.Side == framework.UI.CurrentSide) and (not arrow.Marked) and framework.SongPlayer.CurrentlyPlaying.TimePosition > 0 then
+            if (arrow.Side == framework.UI.CurrentSide) and (not arrow.Marked) and currentlyPlaying.TimePosition > 0 then
                 local position = (arrow.Data.Position % count) .. '' 
 
                 local hitboxOffset = 0 do
@@ -438,33 +279,34 @@ local chanceValues do
                 local result = rollChance()
                 arrow._hitChance = arrow._hitChance or result;
 
-                local hitChance = (library.flags.autoPlayerMode == 'Manual' and result or arrow._hitChance)
+                local hitChance = (Options.AutoplayerMode.Value == 'Manual' and result or arrow._hitChance)
                 if hitChance ~= "Miss" and noteTime >= chanceValues[arrow._hitChance] then
                     fastSpawn(function()
                         arrow.Marked = true;
                         local keyCode = keyCodeMap[arrowData[position].Keybinds.Keyboard[1]]
 
-                        if library.flags.secondaryPressMode then
+                        if Toggles.SecondaryPress.Value then
                             virtualInputManager:SendKeyEvent(true, keyCode, false, nil)
                         else
                             fireSignal(scrollHandler, userInputService.InputBegan, { KeyCode = keyCode, UserInputType = Enum.UserInputType.Keyboard }, false)
                         end
 
-                        if arrow.Data.Length > 0 then
-                            if library.flags.delayMode == 'Random' then
-                                fastWait(arrow.Data.Length + rng:NextNumber(library.flags.heldNoteDelayMin, library.flags.heldNoteDelayMax) / 1000)
-                            else
-                                fastWait(arrow.Data.Length + (library.flags.heldDelay / 1000))
-                            end
+                        local arrowLength = arrow.Data.Length or 0
+                        local isHeld = arrowLength > 0
+
+                        local delayMode = Options.DelayMode.Value
+
+                        local minDelay = isHeld and Options.HeldDelayMin or Options.NoteDelayMin;
+                        local maxDelay = isHeld and Options.HeldDelayMax or Options.NoteDelayMax;
+                        local noteDelay = isHeld and Options.HeldDelay or Options.ReleaseDelay
+   
+                        if Options.DelayMode.Value == 'Random' then
+                            task.wait(arrowLength + rng:NextNumber(minDelay.Value, maxDelay.Value) / 1000)
                         else
-                            if library.flags.delayMode == 'Random' then
-                                fastWait(rng:NextNumber(library.flags.noteDelayMin, library.flags.noteDelayMax) / 1000)
-                            else
-                                fastWait(library.flags.autoDelay / 1000)
-                            end
+                            task.wait(arrowLength + (noteDelay.Value / 1000))
                         end
 
-                        if library.flags.secondaryPressMode then
+                        if Toggles.SecondaryPress.Value then
                             virtualInputManager:SendKeyEvent(false, keyCode, false, nil)
                         else
                             fireSignal(scrollHandler, userInputService.InputEnded, { KeyCode = keyCode, UserInputType = Enum.UserInputType.Keyboard }, false)
@@ -478,68 +320,21 @@ local chanceValues do
     end)
 end
 
--- menu 
-
-local windows = {
-    autoplayer = library:CreateWindow('Autoplayer'),
-    customization = library:CreateWindow('Customization'),
-    configs = library:CreateWindow('Configs'),
-    misc = library:CreateWindow('Miscellaneous')
-}
-
-local folder = windows.autoplayer:AddFolder('Main') do
-    local toggle = folder:AddToggle({ text = 'Autoplayer', flag = 'autoPlayer' })
-
-    folder:AddToggle({ text = 'Secondary press mode', flag = 'secondaryPressMode', callback = function()
-        if library.flags.secondaryPressMode then 
-            library.notify('Only enable "Secondary press mode" if the main autoplayer does not work! It may cause issues or not be as accurate!')
-        end
-    end }) -- alternate mode if something breaks on krml or whatever
-    folder:AddLabel({ text = "Enable if autoplayer breaks" })
-
-    -- Fixed to use toggle:SetState
-    folder:AddBind({ text = 'Autoplayer toggle', flag = 'autoPlayerToggle', key = Enum.KeyCode.End, callback = function()
-        toggle:SetState(not toggle.state)
-    end })
-
-    folder:AddDivider()
-    folder:AddList({ text = 'Autoplayer mode', flag = 'autoPlayerMode', values = { 'Chances', 'Manual'  } })
-end
-
-local folder = windows.customization:AddFolder('Hit chances') do
-    folder:AddSlider({ text = 'Sick %', flag = 'sickChance', min = 0, max = 100, value = 100 })
-    folder:AddSlider({ text = 'Good %', flag = 'goodChance', min = 0, max = 100, value = 0 })
-    folder:AddSlider({ text = 'Ok %', flag = 'okChance', min = 0, max = 100, value = 0 })
-    folder:AddSlider({ text = 'Bad %', flag = 'badChance', min = 0, max = 100, value = 0 })
-    folder:AddSlider({ text = 'Miss %', flag = 'missChance', min = 0, max = 100, value = 0 })
-end
-
-local folder = windows.customization:AddFolder('Timing') do
-    folder:AddSlider({ text = 'Release delay (ms)', flag = 'autoDelay', min = 0, max = 500, value = 20 })
-    folder:AddSlider({ text = 'Held delay (ms)', flag = 'heldDelay', min = -20, max = 100, value = -20 })
-end
-
-local folder = windows.customization:AddFolder('Random timing') do
-    folder:AddList({ text = 'Delay mode', flag = 'delayMode', values = { 'Manual', 'Random' }})
-    folder:AddDivider()
-    folder:AddLabel({ text = 'Note delay' })
-    folder:AddSlider({ flag = 'noteDelayMin', text = 'Minimum (ms)', min = 0, max = 200 })
-    folder:AddSlider({ flag = 'noteDelayMax', text = 'Maximum (ms)', min = 0, max = 200, value = 20 })
-    folder:AddDivider()
-    folder:AddLabel({ text = 'Held note delay' })
-    folder:AddSlider({ flag = 'heldNoteDelayMin', text = 'Minimum (ms)', min = 0, max = 200 })
-    folder:AddSlider({ flag = 'heldNoteDelayMax', text = 'Maximum (ms)', min = 0, max = 200, value = 20 })
-end
-
-local folder = windows.customization:AddFolder('Unlockables') do
+local ActivateUnlockables do
     -- Note: I know you can do this with UserId but it only works if you run it before opening the notes menu
     -- My script should work no matter the order of which you run things :)
+
     local loadStyle = nil
     local function loadStyleProxy(...)
         -- This forces the styles to reload every time
-        local unknown = getupvalue(loadStyle, 1)
-        unknown.Style = nil
-        setupvalue(loadStyle, 1, unknown)
+            
+        local upvalues = getupvalues(loadStyle)
+        for i, upvalue in next, upvalues do
+            if type(upvalue) == 'table' and rawget(upvalue, 'Style') then
+                rawset(upvalue, 'Style', nil);
+                setupvalue(loadStyle, i, upvalue)
+            end
+        end
 
         return loadStyle(...)
     end
@@ -552,124 +347,287 @@ local folder = windows.customization:AddFolder('Unlockables') do
             for i = 1, nups do
                 local upv = getupvalue(obj, i)
                 if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
-                    loadStyle = loadStyle or upv
-                    setupvalue(obj, i, loadStyleProxy)
+                    -- ugly but it works
+                    if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
+                        -- avoid non-game functions :)
 
-                    table.insert(library.callbacks, function()
-                        pcall(setupvalue, obj, i, loadStyle)
-                    end)
+                        loadStyle = loadStyle or upv
+                        setupvalue(obj, i, loadStyleProxy)
+
+                        table.insert(shared.callbacks, function()
+                            assert(pcall(setupvalue, obj, i, loadStyle))
+                        end)
+                    end
                 end
             end
         end
     end
 
-    folder:AddButton({ text = 'Unlock developer arrows', callback = function(state)
+    function ActivateUnlockables()
         local idx = table.find(framework.SongsWhitelist, client.UserId)
         if idx then return end
 
-        library.notify('Developer arrows have been unlocked!', 3)
+        UI:Notify('Developer arrows have been unlocked!', 3)
         table.insert(framework.SongsWhitelist, client.UserId)
-    end })
+    end
 end
 
-local folder = windows.customization:AddFolder('Keybinds') do
-    folder:AddBind({ text = 'Sick', flag = 'sickBind', key = Enum.KeyCode.One, hold = true, callback = function(val) library.flags.sickHeld = (not val) end, })
-    folder:AddBind({ text = 'Good', flag = 'goodBind', key = Enum.KeyCode.Two, hold = true, callback = function(val) library.flags.goodHeld = (not val) end, })
-    folder:AddBind({ text = 'Ok', flag = 'okBind', key = Enum.KeyCode.Three, hold = true, callback = function(val) library.flags.okayHeld = (not val) end, })
-    folder:AddBind({ text = 'Bad', flag = 'badBind', key = Enum.KeyCode.Four, hold = true, callback = function(val) library.flags.missHeld = (not val) end, })
-end
+local SaveManager = {} do
+    SaveManager.Ignore = {}
+    SaveManager.Parser = {
+        Toggle = {
+            Save = function(idx, object) 
+                return { type = 'Toggle', idx = idx, value = object.Value } 
+            end,
+            Load = function(idx, data)
+                if Toggles[idx] then 
+                    Toggles[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        Slider = {
+            Save = function(idx, object)
+                return { type = 'Slider', idx = idx, value = tostring(object.Value) }
+            end,
+            Load = function(idx, data)
+                if Options[idx] then 
+                    Options[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        Dropdown = {
+            Save = function(idx, object)
+                return { type = 'Dropdown', idx = idx, value = object.Value, mutli = object.Multi }
+            end,
+            Load = function(idx, data)
+                if Options[idx] then 
+                    Options[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        ColorPicker = {
+            Save = function(idx, object)
+                return { type = 'ColorPicker', idx = idx, value = object.Value:ToHex() }
+            end,
+            Load = function(idx, data)
+                if Options[idx] then 
+                    Options[idx]:SetValueRGB(Color3.fromHex(data.value))
+                end
+            end,
+        },
+        KeyPicker = {
+            Save = function(idx, object)
+                return { type = 'KeyPicker', idx = idx, mode = object.Mode, key = object.Value }
+            end,
+            Load = function(idx, data)
+                if Options[idx] then 
+                    Options[idx]:SetValue({ data.key, data.mode })
+                end
+            end,
+        }
+    }
 
-if type(readfile) == 'function' and type(writefile) == 'function' and type(makefolder) == 'function' and type(isfolder) == 'function' then
-    if not isfolder('funky_friday_autoplayer\\configs') then
-        makefolder('funky_friday_autoplayer')
-        makefolder('funky_friday_autoplayer\\configs')
+    function SaveManager:Save(name)
+        local fullPath = 'funky_friday_autoplayer/configs/' .. name .. '.json'
+
+        local data = {
+            version = 2,
+            objects = {}
+        }
+
+        for idx, toggle in next, Toggles do
+            if self.Ignore[idx] then continue end
+            table.insert(data.objects, self.Parser[toggle.Type].Save(idx, toggle))
+        end
+
+        for idx, option in next, Options do
+            if not self.Parser[option.Type] then continue end
+            if self.Ignore[idx] then continue end
+
+            table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
+        end 
+
+        local success, encoded = pcall(httpService.JSONEncode, httpService, data)
+        if not success then
+            return false, 'failed to encode data'
+        end
+
+        writefile(fullPath, encoded)
+        return true
     end
 
-    local window = windows.configs do
-        window:AddBox({ text = 'Config name', value = '', flag = 'configNameInput' })
-        library._configList = window:AddList({ text = 'Config list', values = { 'default' }, flag = 'configList' })
-        
-        window:AddButton({ text = 'Save config', callback = function()
-            local name = library.flags.configNameInput
-            if name:gsub(' ', '') == '' then
-                return library.notify('Failed to save. [invalid config name]', 3)
-            end
+    function SaveManager:Load(name)
+        local file = 'funky_friday_autoplayer/configs/' .. name .. '.json'
+        if not isfile(file) then return false, 'invalid file' end
 
-            saveManager:SaveConfig(name)
-        end })
-        
-        window:AddButton({ text = 'Load config', callback = function()
-            local name = library.flags.configList
-            
-            if name:gsub(' ', '') == '' then
-                return library.notify('Failed to load. [invalid config name]', 3)
-            end
+        local success, decoded = pcall(httpService.JSONDecode, httpService, readfile(file))
+        if not success then return false, 'decode error' end
+        if decoded.version ~= 2 then return false, 'invalid version' end
 
-            if not isfile('funky_friday_autoplayer\\configs\\' .. name) then
-                return library.notify('Failed to load. [config does not exist]', 3)
-            end
-
-            saveManager:LoadConfig(name)
-        end })
-
-        window:AddDivider()
-
-        function library.refreshConfigs()
-            for _, value in next, library._configList.values do
-                if value == 'default' then continue end
-                library._configList:RemoveValue(tostring(value))
-            end
-
-            local files = listfiles('funky_friday_autoplayer\\configs')
-            for i = 1, #files do
-                files[i] = files[i]:gsub('funky_friday_autoplayer\\configs\\', '')
-                library._configList:AddValue(files[i])
-            end
-
-            if files[1] then
-                library._configList:SetValue(files[1])
-            else
-                library._configList:SetValue('default')
+        for _, option in next, decoded.objects do
+            if self.Parser[option.type] then
+                self.Parser[option.type].Load(option.idx, option)
             end
         end
 
-        window:AddButton({ text = 'Refresh configs', callback = library.refreshConfigs })
+        return true
     end
-    task.delay(1, library.refreshConfigs)
+
+    function SaveManager.Refresh()
+        local list = listfiles('funky_friday_autoplayer/configs')
+
+        local out = {}
+        for i = 1, #list do
+            local file = list[i]
+            if file:sub(-5) == '.json' then
+                -- i hate this but it has to be done ...
+
+                local pos = file:find('.json', 1, true)
+                local start = pos
+
+                local char = file:sub(pos, pos)
+                while char ~= '/' and char ~= '\\' and char ~= '' do
+                    pos = pos - 1
+                    char = file:sub(pos, pos)
+                end
+
+                if char == '/' or char == '\\' then
+                    table.insert(out, file:sub(pos + 1, start - 1))
+                end
+            end
+        end
+        
+        Options.ConfigList.Values = out;
+        Options.ConfigList:SetValues()
+
+        return out
+    end
+
+    function SaveManager.Check()
+        local list = listfiles('funky_friday_autoplayer/configs')
+
+        for _, file in next, list do
+            if isfolder(file) then continue end
+
+            local data = readfile(file)
+            local success, decoded = pcall(httpService.JSONDecode, httpService, data)
+
+            if success and type(decoded) == 'table' and decoded.version ~= 2 then
+                pcall(delfile, file)
+            end
+        end
+    end
+end
+
+UI.AccentColor = Color3.fromRGB(255, 65, 65)
+UI.AccentColorDark = UI:GetDarkerColor(UI.AccentColor);
+UI:UpdateColorsUsingRegistry()
+
+local Window = UI:CreateWindow(string.format('funky friday autoplayer - version %s | updated: %s', metadata.version, metadata.updated), true)
+local Tabs = {}
+Tabs.Main = Window:AddTab('Main')
+
+local Groups = {}
+Groups.Autoplayer = Tabs.Main:AddLeftGroupbox('Autoplayer')
+    Groups.Autoplayer:AddToggle('Autoplayer', { Text = 'Autoplayer' }):AddKeyPicker('AutoplayerBind', { Default = 'End', NoUI = true, SyncToggleState = true })
+    Groups.Autoplayer:AddToggle('SecondaryPress', { Text = 'Seconary press mode', Tooltip = 'Enable this only if the primary autoplayer does not work.' })
+
+    Groups.Autoplayer:AddDropdown('AutoplayerMode', { Text = 'Autoplayer mode', Default = 1, Values = { 'Chances', 'Manual' } })
+    Groups.Autoplayer:AddDropdown('DelayMode', { Text = 'Delay mode', Default = 1, Values = { 'Manual', 'Random' } })
+
+Groups.HitChances = Tabs.Main:AddLeftGroupbox('Hit chances')
+    Groups.HitChances:AddSlider('SickChance',   { Text = 'Sick chance', Min = 0, Max = 100, Default = 100, Suffix = '%', Rounding = 0 })
+    Groups.HitChances:AddSlider('GoodChance',   { Text = 'Good chance', Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0 })
+    Groups.HitChances:AddSlider('OkChance',     { Text = 'Ok chance',   Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0 })
+    Groups.HitChances:AddSlider('BadChance',    { Text = 'Bad chance',  Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0 })
+    Groups.HitChances:AddSlider('MissChance',   { Text = 'Miss chance', Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0 })
+
+Groups.HitTiming = Tabs.Main:AddRightTabbox('Hit timing')
+    Groups.ManualTiming = Groups.HitTiming:AddTab('Manual delay')
+        Groups.ManualTiming:AddSlider('ReleaseDelay',   { Text = 'Release delay (ms)',  Min = 0,   Max = 500, Default = 20, Rounding = 0 })
+        Groups.ManualTiming:AddSlider('HeldDelay',      { Text = 'Held delay (ms)',     Min = -20, Max = 100, Default = 0,  Rounding = 0 })
+    
+    Groups.RandomTiming = Groups.HitTiming:AddTab('Random delay')
+        Groups.RandomTiming:AddSlider('NoteDelayMin',   { Text = 'Minimum note delay (ms)', Min = 0, Max = 500, Default = 0,    Rounding = 0 })
+        Groups.RandomTiming:AddSlider('NoteDelayMax',   { Text = 'Maximum note delay (ms)', Min = 0, Max = 100, Default = 20,   Rounding = 0 })
+
+        Groups.RandomTiming:AddSlider('HeldDelayMin',   { Text = 'Minimum held note delay (ms)', Min = 0, Max = 500, Default = 0,   Rounding = 0 })
+        Groups.RandomTiming:AddSlider('HeldDelayMax',   { Text = 'Maximum held note delay (ms)', Min = 0, Max = 100, Default = 20,  Rounding = 0 })
+
+Groups.Unlockables = Tabs.Main:AddLeftGroupbox('Unlockables')
+    Groups.Unlockables:AddButton('Unlock developer notes', ActivateUnlockables)
+
+Groups.Keybinds = Tabs.Main:AddLeftGroupbox('Keybinds')
+    Groups.Keybinds:AddLabel('Sick'):AddKeyPicker('SickBind', { Default = 'One', NoUI = true })
+    Groups.Keybinds:AddLabel('Good'):AddKeyPicker('GoodBind', { Default = 'Two', NoUI = true })
+    Groups.Keybinds:AddLabel('Ok'):AddKeyPicker('OkayBind', { Default = 'Three', NoUI = true })
+    Groups.Keybinds:AddLabel('Bad'):AddKeyPicker('BadBind', { Default = 'Four', NoUI = true })
+
+Groups.Credits = Tabs.Main:AddRightGroupbox('Credits')
+    Groups.Credits:AddLabel('<font color="#3da5ff">wally</font> - script')
+    Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contributor')
+    Groups.Credits:AddLabel('Inori - ui library')
+    Groups.Credits:AddLabel('Jan - old ui library')
+
+Groups.Misc = Tabs.Main:AddRightGroupbox('Miscellaneous')
+    Groups.Misc:AddLabel(metadata.message or 'no message found!', true)
+
+    Groups.Misc:AddDivider()
+    Groups.Misc:AddButton('Unload script', function() pcall(shared._unload) end)
+    Groups.Misc:AddButton('Copy discord', function()
+        if pcall(setclipboard, "https://wally.cool/discord") then
+            UI:Notify('Successfully copied discord link to your clipboard!', 5)
+        end
+    end)
+
+    Groups.Misc:AddLabel('Menu toggle'):AddKeyPicker('MenuToggle', { Default = 'Delete', NoUI = true })
+
+    UI.ToggleKeybind = Options.MenuToggle
+
+if type(readfile) == 'function' and type(writefile) == 'function' and type(makefolder) == 'function' and type(isfolder) == 'function' then
+    Tabs.Settings = Window:AddTab('Settings')
+    Groups.Configs = Tabs.Settings:AddLeftGroupbox('Configs')
+
+    makefolder('funky_friday_autoplayer')
+    makefolder('funky_friday_autoplayer\\configs')
+
+    Groups.Configs:AddDropdown('ConfigList', { Text = 'Config list', Values = {} })
+    Groups.Configs:AddInput('ConfigName',    { Text = 'Config name' })
+
+    Groups.Configs:AddDivider()
+
+    Groups.Configs:AddButton('Save config', function()
+        local name = Options.ConfigName.Value;
+        if name:gsub(' ', '') == '' then
+            return UI:Notify('Invalid config name.', 3)
+        end
+
+        local success, err = SaveManager:Save(name)
+        if not success then
+            return UI:Notify(tostring(err), 5)
+        end
+
+        UI:Notify(string.format('Saved config %q', name), 5)
+        task.defer(SaveManager.Refresh)
+    end)
+
+    Groups.Configs:AddButton('Load config', function()
+        local name = Optionss.ConfigList.Value
+        local success, err = SaveManager:Load(name)
+        if not success then
+            return UI:Notify(tostring(err), 5)
+        end
+
+        UI:Notify(string.format('Loaded config %q', name), 5)
+    end)
+
+    Groups.Configs:AddButton('Refresh list', SaveManager.Refresh)
+
+    task.defer(SaveManager.Refresh)
+    task.defer(SaveManager.Check)
 else
-    library.notify('Failed to create configs window due to your exploit missing certain file functions.', 2)
+    UI:Notify('Failed to create configs tab due to your exploit missing certain file functions.', 2)
 end
 
 
-windows.misc:AddLabel({ text = 'Credits:' })
-windows.misc:AddDivider()
-windows.misc:AddLabel({ text = 'Jan - UI library' })
-windows.misc:AddLabel({ text = 'wally - Script' })
-windows.misc:AddLabel({ text = 'Sezei - Contributor'})
-windows.misc:AddLabel({ text = 'aKinlei - Notifications'})
-windows.misc:AddDivider()
-
-windows.misc:AddLabel({ text = 'Version 1.9d' })
-windows.misc:AddLabel({ text = 'Updated 3/20/22' })
-windows.misc:AddLabel({ text = 'Thank you for using this script!' })
-
-windows.misc:AddDivider()
-windows.misc:AddButton({ text = 'Unload script', callback = function()
-    shared._unload()
-    library.notify('Successfully unloaded script!', 2)
-end })
-
-windows.misc:AddButton({ text = 'Copy discord', callback = function()
-    if pcall(setclipboard, "https://wally.cool/discord") then
-        library.notify('Successfully copied discord', 2)
-    end
-end })
-
-windows.misc:AddDivider()
-windows.misc:AddBind({ text = 'Menu toggle', key = Enum.KeyCode.Delete, callback = function() library:Close() end })
-
-library:Init()
-library.notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3)
-if usedCache then
-    library.notify('Loaded with http request cache!', 3)
-end
+UI:Notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3)
