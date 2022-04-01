@@ -1,6 +1,15 @@
 # Change logs
 * Some updates are missing either because I forgot them or they were really small.
 
+## 4/1/22 (2.0)
+	* switched to use LinoriaLib (it is more compact and a bit nicer looking)
+	* fixed 'unlock developer notes' erroring
+	* [internal] fetch version from github file
+	* [misc] added coloring to mine and Sezei's name on the credits
+
+	! all your configs have been reset, sorry.
+	! i probably broke something, so let me know if something doesnt work.
+
 ## 3/31/22 (1.9d)
 	* Misc compatibility fixes for certain free exploits.
 
