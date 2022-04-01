@@ -1,6 +1,9 @@
 # Change logs
 * Some updates are missing either because I forgot them or they were really small.
 
+## 3/31/22 (1.9d)
+	* Misc compatibility fixes for certain free exploits.
+
 ## 3/20/22 (1.9c)
 	+ Added 'Unlock developer arrows' button in new Unlockables section!
 
