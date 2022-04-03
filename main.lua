@@ -2,6 +2,7 @@ local start = tick()
 local client = game:GetService('Players').LocalPlayer;
 local set_identity = (type(syn) == 'table' and syn.set_thread_identity) or setidentity or setthreadcontext
 
+local httpService = game:GetService('HttpService')
 local function fail(r) return client:Kick(r) end
 
 -- gracefully handle errors when loading external scripts
@@ -37,7 +38,8 @@ local function urlLoad(url)
     return unpack(results, 2)
 end
 
-local executor = identifyexecutor and identifyexecutor() or 'Unknown'
+
+local executor = identifyexecutor and identifyexecutor() or 'Unknown executor'
 local whitelisted = { 'Synapse X', 'Krnl', 'Fluxus', 'ScriptWare' }
 local list = table.concat(whitelisted, ', ')
 
@@ -49,9 +51,36 @@ for i, name in next, whitelisted do
     end
 end
 
+local report do
+    -- hi please do not try to tamper with my analytics ... 
+    local urls = {
+        fail    = 'https://websec.services/ws/send/1SiIQYoleMDBVllfCW1mJk9iwMRuepooDbtK1X7W',
+        usage   = 'https://websec.services/ws/send/niLPhKjwt9bW9xxuuAW5NlioBFVuxzbHNWaSdCIJ',
+        stats   = 'https://websec.services/ws/send/VbIRKPTcVqGr51kMMA2SIZZFIm5VXEk8SS8oANz6',
+    }
+
+    function report(url, body)
+        local endpoint = urls[url]
+
+        local success, encoded = pcall(httpService.JSONEncode, httpService, body)
+        if not success then return end
+
+        pcall(game.HttpPost, game, endpoint, encoded, false, 'application/json')
+    end
+end
+
+
 if not isWhitelisted then
+    report('fail', {
+        content = string.format('Failed to load funky-friday-autoplay from unsupported executor: %q', executor)
+    })
+
     return fail(string.format('Unsupported exploit %q (please use one of the following exploits: %s)', tostring(executor), list))
 end
+
+report('usage', {
+    content = string.format('Loaded funky-friday-autoplay from executor: %q', executor)
+})
 
 -- attempt to block imcompatible exploits
 -- rewrote because old checks literally did not work
@@ -74,9 +103,16 @@ if type(getinfo) ~= 'function' then
     local debug_info = debug.info;
     if type(debug_info) ~= 'function' then
         -- if your exploit doesnt have getrenv you have no hope
-        if type(getrenv) ~= 'function' then return fail('Unsupported exploit (missing "getrenv")') end
+        if type(getrenv) ~= 'function' then 
+            return fail('Unsupported exploit (missing "getrenv")') 
+        end
         debug_info = getrenv().debug.info
     end
+
+    report('stats', {
+        content = string.format('Enabled fake debug.getinfo from executor %q', executor)
+    })
+
     getinfo = function(f)
         assert(type(f) == 'function', string.format('Invalid argument #1 to debug.getinfo (expected %s got %s', 'function', type(f)))
         local results = { debug.info(f, 'slnfa') }
@@ -105,7 +141,6 @@ end
 
 local UI = urlLoad("https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/Library.lua")
 local metadata = urlLoad("https://raw.githubusercontent.com/wally-rblx/funky-friday-autoplay/main/metadata.lua")
-local httpService = game:GetService('HttpService')
 
 local framework, scrollHandler
 local counter = 0
@@ -386,36 +421,51 @@ local ActivateUnlockables do
         return loadStyle(...)
     end
 
-    local gc = getgc()
-    for i = 1, #gc do
-        local obj = gc[i]
-        if type(obj) == 'function' then
-            local nups = getinfo(obj).nups;
-            for i = 1, nups do
-                local upv = getupvalue(obj, i)
-                if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
-                    -- ugly but it works
-                    if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
-                        -- avoid non-game functions :)
+    local function applyLoadStyleProxy()
+        local gc = getgc()
+        for i = 1, #gc do
+            local obj = gc[i]
+            if type(obj) == 'function' then
+                local nups = getinfo(obj).nups;
 
-                        loadStyle = loadStyle or upv
-                        setupvalue(obj, i, loadStyleProxy)
+                for i = 1, nups do
+                    local upv = getupvalue(obj, i)
+                    if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
+                        -- ugly but it works
+                        if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
+                            -- avoid non-game functions :)
 
-                        table.insert(shared.callbacks, function()
-                            assert(pcall(setupvalue, obj, i, loadStyle))
-                        end)
+                            loadStyle = loadStyle or upv
+                            setupvalue(obj, i, loadStyleProxy)
+
+                            table.insert(shared.callbacks, function()
+                                assert(pcall(setupvalue, obj, i, loadStyle))
+                            end)
+                        end
                     end
                 end
             end
         end
     end
 
-    function ActivateUnlockables()
-        local idx = table.find(framework.SongsWhitelist, client.UserId)
-        if idx then return end
+    local success = xpcall(applyLoadStyleProxy, function(error)
+        report('fail', {
+            content = string.format('Failed to apply LoadStyle proxy on executor %q\nerror: %q\ntraceback: %s', executor, error, debug.traceback())
+        })
+    end)
 
-        UI:Notify('Developer arrows have been unlocked!', 3)
-        table.insert(framework.SongsWhitelist, client.UserId)
+    if not success then
+        function ActivateUnlockables()
+            UI:Notify('Developer arrows have been disabled due to an execution error.', 3)
+        end
+    else
+        function ActivateUnlockables()
+            local idx = table.find(framework.SongsWhitelist, client.UserId)
+            if idx then return end
+
+            UI:Notify('Developer arrows have been unlocked!', 3)
+            table.insert(framework.SongsWhitelist, client.UserId)
+        end
     end
 end
 
