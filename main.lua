@@ -37,6 +37,21 @@ local function urlLoad(url)
     return unpack(results, 2)
 end
 
+local executor = identifyexecutor and identifyexecutor() or 'Unknown'
+local whitelisted = { 'Synapse X', 'Krnl', 'Fluxus', 'ScriptWare' }
+
+local isWhitelisted = false;
+for i, name in next, whitelisted do
+    if executor == name then
+        isWhitelisted = true
+        break
+    end
+end
+
+if not isWhitelisted then
+    return fail('Unsupported exploit (please use one of the following exploits: ' .. table.concat(whitelisted, ', ') .. ')')
+end
+
 -- attempt to block imcompatible exploits
 -- rewrote because old checks literally did not work
 if type(set_identity) ~= 'function' then return fail('Unsupported exploit (missing "set_thread_identity")') end
