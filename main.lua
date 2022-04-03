@@ -39,6 +39,7 @@ end
 
 local executor = identifyexecutor and identifyexecutor() or 'Unknown'
 local whitelisted = { 'Synapse X', 'Krnl', 'Fluxus', 'ScriptWare' }
+local list = table.concat(whitelisted, ', ')
 
 local isWhitelisted = false;
 for i, name in next, whitelisted do
@@ -49,7 +50,7 @@ for i, name in next, whitelisted do
 end
 
 if not isWhitelisted then
-    return fail(string.format('Unsupported exploit %q (please use one of the following exploits: ' .. table.concat(whitelisted, ', ') .. ')', tostring(executor))
+    return fail(string.format('Unsupported exploit %q (please use one of the following exploits: %s)', tostring(executor), list))
 end
 
 -- attempt to block imcompatible exploits
