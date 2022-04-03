@@ -49,7 +49,7 @@ for i, name in next, whitelisted do
 end
 
 if not isWhitelisted then
-    return fail('Unsupported exploit (please use one of the following exploits: ' .. table.concat(whitelisted, ', ') .. ')')
+    return fail(string.format('Unsupported exploit %q (please use one of the following exploits: ' .. table.concat(whitelisted, ', ') .. ')', tostring(executor))
 end
 
 -- attempt to block imcompatible exploits
