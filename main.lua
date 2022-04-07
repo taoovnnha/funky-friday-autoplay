@@ -659,7 +659,7 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
     end)
 
     Groups.Configs:AddButton('Load config', function()
-        local name = Optionss.ConfigList.Value
+        local name = Options.ConfigList.Value
         local success, err = SaveManager:Load(name)
         if not success then
             return UI:Notify(tostring(err), 5)
