@@ -415,7 +415,7 @@ local ActivateUnlockables do
     end
 end
 
--- Network hooking
+-- UpdateScore hook
 do
     local roundManager = network.Server.RoundManager
     local oldUpdateScore = type(roundManager) == 'table' and roundManager.UpdateScore;
