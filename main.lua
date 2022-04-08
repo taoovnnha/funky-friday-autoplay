@@ -1,12 +1,12 @@
 local start = tick()
 local client = game:GetService('Players').LocalPlayer;
 local set_identity = (type(syn) == 'table' and syn.set_thread_identity) or setidentity or setthreadcontext
+local executor = identifyexecutor and identifyexecutor() or 'Unknown'
 
 local function fail(r) return client:Kick(r) end
 
 -- gracefully handle errors when loading external scripts
 -- added a cache to make hot reloading a bit faster
-
 local usedCache = shared.__urlcache and next(shared.__urlcache) ~= nil
 
 shared.__urlcache = shared.__urlcache or {}
@@ -37,28 +37,12 @@ local function urlLoad(url)
     return unpack(results, 2)
 end
 
-local executor = identifyexecutor and identifyexecutor() or 'Unknown'
-local whitelisted = { 'Synapse X', 'Krnl', 'Fluxus', 'ScriptWare' }
-local list = table.concat(whitelisted, ', ')
-
-local isWhitelisted = false;
-for i, name in next, whitelisted do
-    if executor == name then
-        isWhitelisted = true
-        break
-    end
-end
-
-if not isWhitelisted then
-    return fail(string.format('Unsupported exploit %q (please use one of the following exploits: %s)', tostring(executor), list))
-end
-
 -- attempt to block imcompatible exploits
 -- rewrote because old checks literally did not work
 if type(set_identity) ~= 'function' then return fail('Unsupported exploit (missing "set_thread_identity")') end
 if type(getconnections) ~= 'function' then return fail('Unsupported exploit (missing "getconnections")') end
 if type(getloadedmodules) ~= 'function' then return fail('Unsupported exploit (misssing "getloadedmodules")') end
-if type(getgc) ~= 'function' then return fail('Unsupported exploit (misssing "getgc")') end
+if type(getgc) ~= 'function' then   return fail('Unsupported exploit (misssing "getgc")') end
 
 local getinfo = debug.getinfo or getinfo;
 local getupvalue = debug.getupvalue or getupvalue;
@@ -107,15 +91,20 @@ local UI = urlLoad("https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main
 local metadata = urlLoad("https://raw.githubusercontent.com/wally-rblx/funky-friday-autoplay/main/metadata.lua")
 local httpService = game:GetService('HttpService')
 
-local framework, scrollHandler
+local framework, scrollHandler, network
 local counter = 0
 
 while true do
     for _, obj in next, getgc(true) do
-        if type(obj) == 'table' and rawget(obj, 'GameUI') then
-            framework = obj;
-            break
-        end 
+        if type(obj) == 'table' then 
+            if rawget(obj, 'GameUI') then
+                framework = obj;
+            elseif type(rawget(obj, 'Server')) == 'table' then
+                network = obj;     
+            end
+        end
+
+        if network and framework then break end
     end
 
     for _, module in next, getloadedmodules() do
@@ -123,15 +112,15 @@ while true do
             scrollHandler = module;
             break;
         end
-    end
+    end 
 
-    if (type(framework) == 'table') and (typeof(scrollHandler) == 'Instance') then
+    if (type(framework) == 'table' and typeof(scrollHandler) == 'Instance' and type(network) == 'table') then
         break
     end
 
     counter = counter + 1
     if counter > 6 then
-        fail(string.format('Failed to load game dependencies. Details: %s, %s', type(framework), typeof(scrollHandler)))
+        fail(string.format('Failed to load game dependencies. Details: %s, %s, %s', type(framework), typeof(scrollHandler), type(network)))
     end
     wait(1)
 end
@@ -386,28 +375,35 @@ local ActivateUnlockables do
         return loadStyle(...)
     end
 
-    local gc = getgc()
-    for i = 1, #gc do
-        local obj = gc[i]
-        if type(obj) == 'function' then
-            local nups = getinfo(obj).nups;
-            for i = 1, nups do
-                local upv = getupvalue(obj, i)
-                if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
-                    -- ugly but it works
-                    if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
-                        -- avoid non-game functions :)
+    local function applyLoadStyleProxy(...)
+        local gc = getgc()
+        for i = 1, #gc do
+            local obj = gc[i]
+            if type(obj) == 'function' then
+                local nups = getinfo(obj).nups;
+                for i = 1, nups do
+                    local upv = getupvalue(obj, i)
+                    if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
+                        -- ugly but it works
+                        if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
+                            -- avoid non-game functions :)
 
-                        loadStyle = loadStyle or upv
-                        setupvalue(obj, i, loadStyleProxy)
+                            loadStyle = loadStyle or upv
+                            setupvalue(obj, i, loadStyleProxy)
 
-                        table.insert(shared.callbacks, function()
-                            assert(pcall(setupvalue, obj, i, loadStyle))
-                        end)
+                            table.insert(shared.callbacks, function()
+                                assert(pcall(setupvalue, obj, i, loadStyle))
+                            end)
+                        end
                     end
                 end
             end
         end
+    end
+
+    local success, error = pcall(applyLoadStyleProxy)
+    if not success then
+        return fail(string.format('Failed to hook LoadStyle function. Error(%q)\nExecutor(%q)\n', error, executor))
     end
 
     function ActivateUnlockables()
@@ -417,6 +413,31 @@ local ActivateUnlockables do
         UI:Notify('Developer arrows have been unlocked!', 3)
         table.insert(framework.SongsWhitelist, client.UserId)
     end
+end
+
+-- Network hooking
+do
+    local roundManager = network.Server.RoundManager
+    local oldUpdateScore = type(roundManager) == 'table' and roundManager.UpdateScore;
+
+    function roundManager.UpdateScore(...)
+        local args = { ... }
+        local score = args[2]
+
+        if type(score) == 'number' and Options.ScoreModifier then
+            if Options.ScoreModifier.Value == 'No decrease on miss' then
+                args[2] = 0
+            elseif Options.ScoreModifier.Value == 'Increase score on miss' then
+                args[2] = math.abs(score)
+            end
+        end
+
+        return oldUpdateScore(unpack(args))
+    end
+
+    table.insert(shared.callbacks, function()
+        roundManager.UpdateScore = oldUpdateScore
+    end)
 end
 
 local SaveManager = {} do
@@ -570,7 +591,14 @@ UI.AccentColor = Color3.fromRGB(255, 65, 65)
 UI.AccentColorDark = UI:GetDarkerColor(UI.AccentColor);
 UI:UpdateColorsUsingRegistry()
 
-local Window = UI:CreateWindow(string.format('funky friday autoplayer - version %s | updated: %s', metadata.version, metadata.updated), true)
+local Window = UI:CreateWindow({
+    Title = string.format('funky friday autoplayer - version %s | updated: %s', metadata.version, metadata.updated),
+    AutoShow = true,
+    
+    Center = true,
+    Size = UDim2.fromOffset(550, 610),
+})
+
 local Tabs = {}
 Tabs.Main = Window:AddTab('Main')
 
@@ -579,8 +607,17 @@ Groups.Autoplayer = Tabs.Main:AddLeftGroupbox('Autoplayer')
     Groups.Autoplayer:AddToggle('Autoplayer', { Text = 'Autoplayer' }):AddKeyPicker('AutoplayerBind', { Default = 'End', NoUI = true, SyncToggleState = true })
     Groups.Autoplayer:AddToggle('SecondaryPress', { Text = 'Seconary press mode', Tooltip = 'Enable this only if the primary autoplayer does not work.' })
 
+    Groups.Autoplayer:AddDivider()
     Groups.Autoplayer:AddDropdown('AutoplayerMode', { Text = 'Autoplayer mode', Default = 1, Values = { 'Chances', 'Manual' } })
     Groups.Autoplayer:AddDropdown('DelayMode', { Text = 'Delay mode', Default = 1, Values = { 'Manual', 'Random' } })
+
+    Groups.Autoplayer:AddDivider()
+    Groups.Autoplayer:AddDropdown('ScoreModifier', { 
+        Text = 'Score modifications', 
+        Default = 1, 
+        Values = { 'Do nothing', 'No decrease on miss', 'Increase score on miss' },
+        Tooltip = 'Modifies certain game functions to help you keep your score up!',
+    })
 
 Groups.HitChances = Tabs.Main:AddLeftGroupbox('Hit chances')
     Groups.HitChances:AddSlider('SickChance',   { Text = 'Sick chance', Min = 0, Max = 100, Default = 100, Suffix = '%', Rounding = 0 })
@@ -601,9 +638,6 @@ Groups.HitTiming = Tabs.Main:AddRightTabbox('Hit timing')
         Groups.RandomTiming:AddSlider('HeldDelayMin',   { Text = 'Minimum held note delay (ms)', Min = 0, Max = 500, Default = 0,   Rounding = 0 })
         Groups.RandomTiming:AddSlider('HeldDelayMax',   { Text = 'Maximum held note delay (ms)', Min = 0, Max = 100, Default = 20,  Rounding = 0 })
 
-Groups.Unlockables = Tabs.Main:AddLeftGroupbox('Unlockables')
-    Groups.Unlockables:AddButton('Unlock developer notes', ActivateUnlockables)
-
 Groups.Keybinds = Tabs.Main:AddLeftGroupbox('Keybinds')
     Groups.Keybinds:AddLabel('Sick'):AddKeyPicker('SickBind', { Default = 'One', NoUI = true })
     Groups.Keybinds:AddLabel('Good'):AddKeyPicker('GoodBind', { Default = 'Two', NoUI = true })
@@ -615,6 +649,9 @@ Groups.Credits = Tabs.Main:AddRightGroupbox('Credits')
     Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contributor')
     Groups.Credits:AddLabel('Inori - ui library')
     Groups.Credits:AddLabel('Jan - old ui library')
+
+Groups.Unlockables = Tabs.Main:AddRightGroupbox('Unlockables')
+    Groups.Unlockables:AddButton('Unlock developer notes', ActivateUnlockables)
 
 Groups.Misc = Tabs.Main:AddRightGroupbox('Miscellaneous')
     Groups.Misc:AddLabel(metadata.message or 'no message found!', true)

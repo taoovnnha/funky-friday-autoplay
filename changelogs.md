@@ -1,6 +1,23 @@
 # Change logs
 * Some updates are missing either because I forgot them or they were really small.
 
+# 4/8/22 (2.1)
+	- removed exploits whitelist. please stop complaining when your unknown exploits break :)
+	* added exploits name to kick messages to diagnose issues
+	* added error handler to developer notes functions
+
+	* organized menu, increased size.
+	* menu now loads in the center of your screen.
+
+	+ added 'Score modifications' to the autoplayer, with 3 options.
+	* Options & explanations:
+		* nothing: does nothing.
+		* No decrease on miss: prevents misses from dropping you score.
+		* Increase score on miss: makes it so the score you would lose from missing actually increases it instead :)
+
+# 4/7/22 (2.0.1)
+	* fixed 'Load config' button
+
 ## 4/1/22 (2.0)
 	* switched to use LinoriaLib (it is more compact and a bit nicer looking)
 	* fixed 'unlock developer notes' erroring
