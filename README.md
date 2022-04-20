@@ -3,7 +3,7 @@ A fully open source auto player script for https://www.roblox.com/games/64477980
 
 ## Reporting bugs
 You can open up an issue on the GitHub (although I don't check it very much) or you may message me on v3rmillion / Discord.<br>
-I have a discord server for another project, although you may use it to talk about Funky Friday (https://wally.cool/discord)
+I do not have a discord server at this time.
 
 If you are reporting any issues, please include the following information:
 
