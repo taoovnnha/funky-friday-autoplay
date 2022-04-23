@@ -3,7 +3,7 @@ A fully open source auto player script for https://www.roblox.com/games/64477980
 
 ## Reporting bugs
 You can open up an issue on the GitHub (although I don't check it very much) or you may message me on v3rmillion / Discord.<br>
-I do not have a discord server at this time.
+https://wally.cool/discord :)
 
 If you are reporting any issues, please include the following information:
 
