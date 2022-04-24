@@ -275,8 +275,9 @@ local chanceValues do
             if type(arrow) ~= 'table' then
                 continue
             end
-
-            local ignoredNoteTypes = { Death = true, ['Pea Note'] = true, Poison = true }
+            
+            -- todo: switch to this (https://i.imgur.com/pEVe6Tx.png)
+            local ignoredNoteTypes = { Death = true, Mechanic = true, Poison = true }
 
             if type(arrow.NoteDataConfigs) == 'table' then 
                 if ignoredNoteTypes[arrow.NoteDataConfigs.Type] then 
