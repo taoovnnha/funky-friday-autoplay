@@ -381,11 +381,11 @@ local ActivateUnlockables do
         for i = 1, #gc do
             local obj = gc[i]
             if type(obj) == 'function' then
-                local nups = getinfo(obj).nups;
-                for i = 1, nups do
-                    local upv = getupvalue(obj, i)
+                -- goodbye nups numeric loop because script-ware is weird
+                local upvalues = getupvalues(obj)
+                for i, upv in next, upvalues do
                     if type(upv) == 'function' and getinfo(upv).name == 'LoadStyle' then
-                        -- ugly but it works
+                        -- ugly but it works, we don't know every name for is_synapse_function and similar
                         if getinfo(obj).source:match('%.ArrowSelector%.Customize$') and getinfo(upv).source:match('%.ArrowSelector%.Customize$') then
                             -- avoid non-game functions :)
 
