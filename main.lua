@@ -418,7 +418,11 @@ end
 
 -- UpdateScore hook
 do
-    local roundManager = network.Server.RoundManager
+    local roundManager = nil;
+    repeat
+        task.wait()
+        roundManager = network.Server.RoundManager
+    until roundManager;
     local oldUpdateScore = type(roundManager) == 'table' and roundManager.UpdateScore;
 
     function roundManager.UpdateScore(...)
