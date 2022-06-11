@@ -88,6 +88,8 @@ if type(getinfo) ~= 'function' then
 end
 
 local UI = urlLoad("https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/Library.lua")
+local themeManager = urlLoad("https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/addons/ThemeManager.lua")
+
 local metadata = urlLoad("https://raw.githubusercontent.com/wally-rblx/funky-friday-autoplay/main/metadata.lua")
 local httpService = game:GetService('HttpService')
 
@@ -576,9 +578,13 @@ local SaveManager = {} do
             return false, string.format('error occured during file deletion: %s', err)
         end
 
-
-
         return true
+    end
+
+    function SaveManager:SetIgnoreIndexes(list)
+        for i = 1, #list do 
+            table.insert(self.Ignore, list[i])
+        end
     end
 
     function SaveManager.Check()
@@ -597,10 +603,6 @@ local SaveManager = {} do
     end
 end
 
-UI.AccentColor = Color3.fromRGB(255, 65, 65)
-UI.AccentColorDark = UI:GetDarkerColor(UI.AccentColor);
-UI:UpdateColorsUsingRegistry()
-
 local Window = UI:CreateWindow({
     Title = string.format('funky friday autoplayer - version %s | updated: %s', metadata.version, metadata.updated),
     AutoShow = true,
@@ -610,9 +612,11 @@ local Window = UI:CreateWindow({
 })
 
 local Tabs = {}
-Tabs.Main = Window:AddTab('Main')
-
 local Groups = {}
+
+Tabs.Main = Window:AddTab('Main')
+Tabs.Miscellaneous = Window:AddTab('Miscellaneous')
+
 Groups.Autoplayer = Tabs.Main:AddLeftGroupbox('Autoplayer')
     Groups.Autoplayer:AddToggle('Autoplayer', { Text = 'Autoplayer' }):AddKeyPicker('AutoplayerBind', { Default = 'End', NoUI = true, SyncToggleState = true })
     Groups.Autoplayer:AddDropdown('PressMode', { Text = 'Key press mode', Default = 'Fire signal', Values = { 'Fire signal', 'Key press' }, Tooltip = 'Set this to "Key press" if the other mode does not work' })
@@ -648,22 +652,23 @@ Groups.HitTiming = Tabs.Main:AddRightTabbox('Hit timing')
         Groups.RandomTiming:AddSlider('HeldDelayMin',   { Text = 'Minimum held note delay (ms)', Min = 0, Max = 500, Default = 0,   Rounding = 0 })
         Groups.RandomTiming:AddSlider('HeldDelayMax',   { Text = 'Maximum held note delay (ms)', Min = 0, Max = 100, Default = 20,  Rounding = 0 })
 
-Groups.Keybinds = Tabs.Main:AddLeftGroupbox('Keybinds')
+Groups.Keybinds = Tabs.Main:AddRightGroupbox('Keybinds')
     Groups.Keybinds:AddLabel('Sick'):AddKeyPicker('SickBind', { Default = 'One', NoUI = true })
     Groups.Keybinds:AddLabel('Good'):AddKeyPicker('GoodBind', { Default = 'Two', NoUI = true })
     Groups.Keybinds:AddLabel('Ok'):AddKeyPicker('OkayBind', { Default = 'Three', NoUI = true })
     Groups.Keybinds:AddLabel('Bad'):AddKeyPicker('BadBind', { Default = 'Four', NoUI = true })
 
-Groups.Credits = Tabs.Main:AddRightGroupbox('Credits')
+Groups.Configs = Tabs.Miscellaneous:AddRightGroupbox('Configs')
+Groups.Credits = Tabs.Miscellaneous:AddRightGroupbox('Credits')
     Groups.Credits:AddLabel('<font color="#3da5ff">wally</font> - script')
     Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contributor')
     Groups.Credits:AddLabel('Inori - ui library')
     Groups.Credits:AddLabel('Jan - old ui library')
 
-Groups.Unlockables = Tabs.Main:AddRightGroupbox('Unlockables')
+Groups.Unlockables = Tabs.Miscellaneous:AddRightGroupbox('Unlockables')
     Groups.Unlockables:AddButton('Unlock developer notes', ActivateUnlockables)
 
-Groups.Misc = Tabs.Main:AddRightGroupbox('Miscellaneous')
+Groups.Misc = Tabs.Miscellaneous:AddRightGroupbox('Miscellaneous')
     Groups.Misc:AddLabel(metadata.message or 'no message found!', true)
 
     Groups.Misc:AddDivider()
@@ -678,10 +683,8 @@ Groups.Misc = Tabs.Main:AddRightGroupbox('Miscellaneous')
 
     UI.ToggleKeybind = Options.MenuToggle
 
-if type(readfile) == 'function' and type(writefile) == 'function' and type(makefolder) == 'function' and type(isfolder) == 'function' then
-    Tabs.Settings = Window:AddTab('Settings')
-    Groups.Configs = Tabs.Settings:AddLeftGroupbox('Configs')
-
+-- if type(readfile) == 'function' and type(writefile) == 'function' and type(makefolder) == 'function' and type(isfolder) == 'function' then
+if false then 
     makefolder('funky_friday_autoplayer')
     makefolder('funky_friday_autoplayer\\configs')
 
@@ -735,8 +738,40 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
     task.defer(SaveManager.Refresh)
     task.defer(SaveManager.Check)
 else
-    UI:Notify('Failed to create configs tab due to your exploit missing certain file functions.', 2)
+    Groups.Configs:AddLabel('Your exploit is missing file functions so you are unable to use configs.', true)
+    --UI:Notify('Failed to create configs tab due to your exploit missing certain file functions.', 2)
 end
 
+-- Themes
+do
+    local latestThemeIndex = 0
+    for i, theme in next, themeManager.BuiltInThemes do
+        if theme[1] > latestThemeIndex then
+            latestThemeIndex = theme[1]
+        end
+    end
+
+    latestThemeIndex = latestThemeIndex + 1
+
+    local funkyFridayTheme = table.clone(themeManager.BuiltInThemes.Default[2])
+    funkyFridayTheme.AccentColor = Color3.fromRGB(255, 65, 65):ToHex()
+
+    themeManager.BuiltInThemes['Funky friday'] = { latestThemeIndex, funkyFridayTheme }
+
+    themeManager:SetLibrary(UI)
+    themeManager:SetFolder('funky_friday_autoplayer')
+    themeManager:ApplyToGroupbox(Tabs.Miscellaneous:AddLeftGroupbox('Themes'))
+
+    SaveManager:SetIgnoreIndexes({ 
+        "BackgroundColor", "MainColor", "AccentColor", "OutlineColor", "FontColor", -- themes
+        "ThemeManager_ThemeList", 'ThemeManager_CustomThemeList', 'ThemeManager_CustomThemeName', -- themes
+    })
+
+    task.defer(function()
+        if Options.ThemeManager_ThemeList.Value == 'Default' then
+            Options.ThemeManager_ThemeList:SetValue('Funky friday')
+        end
+    end)
+end
 
 UI:Notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3)

@@ -1,5 +1,5 @@
 return {
-	version = '2.2',
+	version = '2.2a',
 	updated = '6/10/22',
-	message = 'Fixed for game update'
+	message = 'Added themes menu!'
 }
