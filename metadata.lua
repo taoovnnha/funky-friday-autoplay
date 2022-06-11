@@ -1,5 +1,5 @@
 return {
-	version = '2.1b',
-	updated = '4/23/22',
-	message = 'Updated discord invite :)'
+	version = '2.2',
+	updated = '6/10/22',
+	message = 'Fixed for game update'
 }

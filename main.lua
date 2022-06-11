@@ -260,22 +260,12 @@ local chanceValues do
             return 
         end
 
-        local arrows = {}
-        for _, obj in next, framework.UI.ActiveSections do
-            arrows[#arrows + 1] = obj;
-        end
-
+        local arrows = framework.UI:GetNotes()
         local count = framework.SongPlayer:GetKeyCount()
         local mode = count .. 'Key'
 
         local arrowData = framework.ArrowData[mode].Arrows
-
-        for idx = 1, #arrows do
-            local arrow = arrows[idx]
-            if type(arrow) ~= 'table' then
-                continue
-            end
-            
+        for i, arrow in next, arrows do
             -- todo: switch to this (https://i.imgur.com/pEVe6Tx.png)
             local ignoredNoteTypes = { Death = true, Mechanic = true, Poison = true }
 
@@ -322,7 +312,7 @@ local chanceValues do
                         arrow.Marked = true;
                         local keyCode = keyCodeMap[arrowData[position].Keybinds.Keyboard[1]]
 
-                        if Toggles.SecondaryPress.Value then
+                        if Options.PressMode.Value == 'Key press' then
                             virtualInputManager:SendKeyEvent(true, keyCode, false, nil)
                         else
                             fireSignal(scrollHandler, userInputService.InputBegan, { KeyCode = keyCode, UserInputType = Enum.UserInputType.Keyboard }, false)
@@ -343,7 +333,7 @@ local chanceValues do
                             task.wait(arrowLength + (noteDelay.Value / 1000))
                         end
 
-                        if Toggles.SecondaryPress.Value then
+                        if Options.PressMode.Value == 'Key press' then
                             virtualInputManager:SendKeyEvent(false, keyCode, false, nil)
                         else
                             fireSignal(scrollHandler, userInputService.InputEnded, { KeyCode = keyCode, UserInputType = Enum.UserInputType.Keyboard }, false)
@@ -572,8 +562,23 @@ local SaveManager = {} do
         
         Options.ConfigList.Values = out;
         Options.ConfigList:SetValues()
+        Options.ConfigList:Display()
 
         return out
+    end
+
+    function SaveManager:Delete(name)
+        local file = 'funky_friday_autoplayer/configs/' .. name .. '.json'
+        if not isfile(file) then return false, string.format('Config %q does not exist', name) end
+
+        local succ, err = pcall(delfile, file)
+        if not succ then
+            return false, string.format('error occured during file deletion: %s', err)
+        end
+
+
+
+        return true
     end
 
     function SaveManager.Check()
@@ -601,7 +606,7 @@ local Window = UI:CreateWindow({
     AutoShow = true,
     
     Center = true,
-    Size = UDim2.fromOffset(550, 610),
+    Size = UDim2.fromOffset(550, 627),
 })
 
 local Tabs = {}
@@ -610,7 +615,7 @@ Tabs.Main = Window:AddTab('Main')
 local Groups = {}
 Groups.Autoplayer = Tabs.Main:AddLeftGroupbox('Autoplayer')
     Groups.Autoplayer:AddToggle('Autoplayer', { Text = 'Autoplayer' }):AddKeyPicker('AutoplayerBind', { Default = 'End', NoUI = true, SyncToggleState = true })
-    Groups.Autoplayer:AddToggle('SecondaryPress', { Text = 'Seconary press mode', Tooltip = 'Enable this only if the primary autoplayer does not work.' })
+    Groups.Autoplayer:AddDropdown('PressMode', { Text = 'Key press mode', Default = 'Fire signal', Values = { 'Fire signal', 'Key press' }, Tooltip = 'Set this to "Key press" if the other mode does not work' })
 
     Groups.Autoplayer:AddDivider()
     Groups.Autoplayer:AddDropdown('AutoplayerMode', { Text = 'Autoplayer mode', Default = 1, Values = { 'Chances', 'Manual' } })
@@ -700,7 +705,7 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
         task.defer(SaveManager.Refresh)
     end)
 
-    Groups.Configs:AddButton('Load config', function()
+    Groups.Configs:AddButton('Load', function()
         local name = Options.ConfigList.Value
         local success, err = SaveManager:Load(name)
         if not success then
@@ -708,6 +713,21 @@ if type(readfile) == 'function' and type(writefile) == 'function' and type(makef
         end
 
         UI:Notify(string.format('Loaded config %q', name), 5)
+    end):AddButton('Delete', function()
+        local name = Options.ConfigList.Value
+        if name:gsub(' ', '') == '' then
+            return UI:Notify('Invalid config name.', 3)
+        end
+
+        local success, err = SaveManager:Delete(name)
+        if not success then
+            return UI:Notify(tostring(err), 5)
+        end
+
+        UI:Notify(string.format('Deleted config %q', name), 5)
+
+        task.spawn(Options.ConfigList.SetValue, Options.ConfigList, nil)
+        task.defer(SaveManager.Refresh)
     end)
 
     Groups.Configs:AddButton('Refresh list', SaveManager.Refresh)
