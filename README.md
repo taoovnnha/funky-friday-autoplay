@@ -17,3 +17,5 @@ If you are reporting any issues, please include the following information:
 ## Contact information:
 Discord: wally#5423 (727303510185607279)<br>
 v3rmillion: https://v3rmillion.net/member.php?action=profile&uid=1091612
+
+fork vì không vì gì cả
